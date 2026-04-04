@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>流星雨動畫（隨機）</title>
+  <style>
+    :root {
+      --panel-bg: rgba(10, 14, 28, 0.72);
+      --panel-bd: rgba(255, 255, 255, 0.14);
+      --text: rgba(255, 255, 255, 0.92);
+      --muted: rgba(255, 255, 255, 0.72);
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #070914;
+      overflow: hidden;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", Arial;
+      color: var(--text);
+    }
+    #c {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    .hud {
+      position: fixed;
+      left: 12px;
+      top: 12px;
+      width: min(360px, calc(100vw - 24px));
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-bd);
+      border-radius: 16px;
+      padding: 12px 12px 10px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.35);
+      user-select: none;
+    }
+    .hud h1 {
+      font-size: 15px;
+      margin: 0 0 8px;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .badge {
+      font-size: 12px;
+      padding: 3px 8px;
+      border: 1px solid var(--panel-bd);
+      border-radius: 999px;
+      color: var(--muted);
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      margin: 8px 0;
+    }
+    .row label {
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+    .row output {
+      font-variant-numeric: tabular-nums;
+      font-size: 12.5px;
+      color: var(--text);
+    }
+    input[type="range"]{
+      width: 100%;
+      accent-color: #cfd6ff;
+    }
+    .controls {
+      margin-top: 6px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--panel-bd);
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 12.5px;
+    }
+    button:hover { background: rgba(255,255,255,0.12); }
+    button:active { transform: translateY(1px); }
+    .hint {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .corner {
+      position: fixed;
+      right: 12px;
+      bottom: 12px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(10, 14, 28, 0.55);
+      border: 1px solid rgba(255,255,255,0.12);
+      backdrop-filter: blur(10px);
+      font-size: 12px;
+      color: rgba(255,255,255,0.72);
+      max-width: min(620px, calc(100vw - 24px));
+    }
+    .kbd {
+      display: inline-block;
+      padding: 2px 6px;
+      border: 1px solid rgba(255,255,255,0.18);
+      border-bottom-color: rgba(255,255,255,0.10);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.86);
+      margin: 0 3px;
+      font-variant-numeric: tabular-nums;
+    }
+    @media (max-width: 560px) {
+      .corner { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div class="hud" id="hud">
+    <h1>
+      <span>🌠 流星雨（隨機）</span>
+      <span class="badge" id="fps">-- fps</span>
+    </h1>
+
+    <div class="row">
+      <label for="rate">流星密度（每秒）</label>
+      <output id="rateOut">6</output>
+    </div>
+    <input id="rate" type="range" min="0" max="30" step="1" value="6" />
+
+    <div class="row">
+      <label for="speed">速度（倍）</label>
+      <output id="speedOut">1.0</output>
+    </div>
+    <input id="speed" type="range" min="0.3" max="2.2" step="0.1" value="1.0" />
+
+    <div class="row">
+      <label for="tail">尾跡長度</label>
+      <output id="tailOut">1.0</output>
+    </div>
+    <input id="tail" type="range" min="0.5" max="2.0" step="0.1" value="1.0" />
+
+    <div class="row">
+      <label for="wind">風向（水平漂移）</label>
+      <output id="windOut">0.00</output>
+    </div>
+    <input id="wind" type="range" min="-0.9" max="0.9" step="0.05" value="0" />
+
+    <div class="row">
+      <label for="fireInt">火流星平均間隔（秒）</label>
+      <output id="fireIntOut">30</output>
+    </div>
+    <input id="fireInt" type="range" min="5" max="120" step="5" value="30" />
+
+    <div class="controls">
+      <button id="toggle">暫停</button>
+      <button id="burst">爆發（3 秒）</button>
+      <button id="reset">重置</button>
+      <button id="hide">隱藏面板</button>
+    </div>
+
+    <div class="hint">
+      小技巧：<span class="kbd">空白鍵</span> 暫停／播放、<span class="kbd">B</span> 爆發、<span class="kbd">H</span> 面板顯示。
+      火流星會伴隨短暫閃光，並「混合兩個光源」：火流星本身的光暈＋地球大氣層被照亮。
+    </div>
+  </div>
+
+  <div class="corner">
+    這是「隨機流星雨」模擬：背景星點＋微弱月光＋流星尾跡＋地球自轉（程序生成貼圖）＋火流星閃光（照亮雲層/大氣）。
+    你可以用面板調整火流星平均間隔（預設約每 30 秒 1 顆）。
+  </div>
+
+<script>
+(() => {
+  /** Canvas setup */
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: false });
+
+  let W = 0, H = 0, DPR = 1;
+  function resize() {
+    DPR = Math.max(1, Math.min(2.5, window.devicePixelRatio || 1));
+    W = Math.floor(window.innerWidth);
+    H = Math.floor(window.innerHeight);
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    buildStars();
+    buildEarthTexture();
+  }
+  window.addEventListener('resize', resize, { passive: true });
+
+  /** UI */
+  const elRate = document.getElementById('rate');
+  const elSpeed = document.getElementById('speed');
+  const elTail = document.getElementById('tail');
+  const elWind = document.getElementById('wind');
+  const elFireInt = document.getElementById('fireInt');
+
+  const rateOut = document.getElementById('rateOut');
+  const speedOut = document.getElementById('speedOut');
+  const tailOut = document.getElementById('tailOut');
+  const windOut = document.getElementById('windOut');
+  const fireIntOut = document.getElementById('fireIntOut');
+
+  const fpsBadge = document.getElementById('fps');
+  const btnToggle = document.getElementById('toggle');
+  const btnBurst = document.getElementById('burst');
+  const btnReset = document.getElementById('reset');
+  const btnHide = document.getElementById('hide');
+  const hud = document.getElementById('hud');
+
+  function syncUI() {
+    rateOut.textContent = String(elRate.value);
+    speedOut.textContent = Number(elSpeed.value).toFixed(1);
+    tailOut.textContent = Number(elTail.value).toFixed(1);
+    windOut.textContent = Number(elWind.value).toFixed(2);
+    fireIntOut.textContent = String(elFireInt.value);
+  }
+  [elRate, elSpeed, elTail, elWind, elFireInt].forEach(el => el.addEventListener('input', syncUI));
+
+  /** Helpers */
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const expRand = (mean) => -Math.log(Math.max(1e-9, Math.random())) * mean; // exponential RV
+
+  /** Fireball flash (short-lived) */
+  let flash = 0;     // 0..~1.6
+  let flashX = 0;    // screen coords
+  let flashY = 0;
+  function triggerFlash(x, y, intensity = 1) {
+    flash = Math.max(flash, 0.85 * intensity);
+    flashX = x;
+    flashY = y;
+  }
+  function decayFlash(dt) {
+    // ~0.25–0.35s fade
+    flash = Math.max(0, flash - dt * 3.6);
+  }
+
+  /** Earth state (for mixed light source) */
+  const earthState = { cx: 0, cy: 0, r: 1 };
+
+  /** Star field */
+  let stars = [];
+  function buildStars() {
+    const n = Math.floor((W * H) / 9000);
+    stars = new Array(n).fill(0).map(() => ({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: rand(0.6, 1.8),
+      a: rand(0.18, 0.85),
+      tw: rand(0.4, 2.4),
+      ph: rand(0, Math.PI * 2)
+    }));
+  }
+
+  /** Earth (procedural texture + slow rotation) */
+  const earth = {
+    tex: document.createElement('canvas'),
+    clouds: document.createElement('canvas'),
+    size: 640
+  };
+
+  function buildEarthTexture() {
+    const s = earth.size;
+    earth.tex.width = earth.tex.height = s;
+    earth.clouds.width = earth.clouds.height = s;
+
+    const tctx = earth.tex.getContext('2d');
+    const cctx = earth.clouds.getContext('2d');
+
+    // Ocean base
+    const ocean = tctx.createLinearGradient(0, 0, 0, s);
+    ocean.addColorStop(0, '#0b2a5e');
+    ocean.addColorStop(0.55, '#0a224d');
+    ocean.addColorStop(1, '#071638');
+    tctx.fillStyle = ocean;
+    tctx.fillRect(0, 0, s, s);
+
+    // Subtle noise
+    const img = tctx.getImageData(0, 0, s, s);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const n = (Math.random() - 0.5) * 18;
+      d[i] = clamp(d[i] + n, 0, 255);
+      d[i + 1] = clamp(d[i + 1] + n, 0, 255);
+      d[i + 2] = clamp(d[i + 2] + n, 0, 255);
+    }
+    tctx.putImageData(img, 0, 0);
+
+    // Continents
+    function blob(x, y, r, fill, stroke, alpha = 1) {
+      tctx.save();
+      tctx.globalAlpha = alpha;
+      tctx.fillStyle = fill;
+      tctx.strokeStyle = stroke;
+      tctx.lineWidth = 2;
+      tctx.beginPath();
+      const pts = Math.floor(rand(10, 18));
+      for (let i = 0; i <= pts; i++) {
+        const a = (i / pts) * Math.PI * 2;
+        const rr = r * rand(0.72, 1.15);
+        const px = x + Math.cos(a) * rr;
+        const py = y + Math.sin(a) * rr;
+        if (i === 0) tctx.moveTo(px, py);
+        else tctx.lineTo(px, py);
+      }
+      tctx.closePath();
+      tctx.fill();
+      tctx.stroke();
+      tctx.restore();
+    }
+
+    const greens = [
+      { f: '#2c7a4b', s: 'rgba(10,25,18,0.35)' },
+      { f: '#1f6a3f', s: 'rgba(10,25,18,0.35)' },
+      { f: '#3a8a57', s: 'rgba(10,25,18,0.32)' }
+    ];
+    for (let k = 0; k < 14; k++) {
+      const g = greens[Math.floor(Math.random() * greens.length)];
+      const x = rand(s * 0.18, s * 0.82);
+      const y = rand(s * 0.22, s * 0.78);
+      const r = rand(s * 0.05, s * 0.13);
+      blob(x, y, r, g.f, g.s, 0.95);
+      const nSat = Math.floor(rand(2, 6));
+      for (let j = 0; j < nSat; j++) {
+        blob(
+          x + rand(-r * 1.2, r * 1.2),
+          y + rand(-r * 1.2, r * 1.2),
+          r * rand(0.25, 0.6),
+          g.f,
+          g.s,
+          0.9
+        );
+      }
+    }
+
+    // Polar ice
+    const ice = tctx.createRadialGradient(s * 0.5, s * 0.08, 0, s * 0.5, s * 0.08, s * 0.42);
+    ice.addColorStop(0, 'rgba(235,245,255,0.55)');
+    ice.addColorStop(1, 'rgba(235,245,255,0)');
+    tctx.fillStyle = ice;
+    tctx.beginPath();
+    tctx.arc(s * 0.5, s * 0.08, s * 0.42, 0, Math.PI * 2);
+    tctx.fill();
+
+    const ice2 = tctx.createRadialGradient(s * 0.5, s * 0.92, 0, s * 0.5, s * 0.92, s * 0.42);
+    ice2.addColorStop(0, 'rgba(235,245,255,0.35)');
+    ice2.addColorStop(1, 'rgba(235,245,255,0)');
+    tctx.fillStyle = ice2;
+    tctx.beginPath();
+    tctx.arc(s * 0.5, s * 0.92, s * 0.42, 0, Math.PI * 2);
+    tctx.fill();
+
+    // Clouds
+    cctx.clearRect(0, 0, s, s);
+    for (let i = 0; i < 1200; i++) {
+      const x = Math.random() * s;
+      const y = Math.random() * s;
+      const r = rand(0.6, 3.2);
+      const a = rand(0.02, 0.09);
+      cctx.fillStyle = `rgba(255,255,255,${a})`;
+      cctx.beginPath();
+      cctx.arc(x, y, r, 0, Math.PI * 2);
+      cctx.fill();
+    }
+  }
+
+  function drawEarth(now) {
+    const minSide = Math.min(W, H);
+
+    // Radius tuned so area ~ 1/4 screen (cinematic; slightly off-bottom)
+    const r = minSide * 0.37;
+    const cx = Math.max(r * 1.05, W * 0.22);
+    const cy = H - r * 0.78;
+
+    earthState.cx = cx;
+    earthState.cy = cy;
+    earthState.r = r;
+
+    const spin = now * 0.00003;
+    const cloudSpin = now * 0.00005;
+
+    // Mixed light factor: if a fireball happens near Earth, atmosphere brightens more.
+    const dist = Math.hypot(flashX - cx, flashY - cy);
+    const prox = (flash > 0.001) ? clamp(1 - dist / (r * 3.2), 0, 1) : 0;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Atmosphere glow (boosted by flash + proximity)
+    ctx.globalCompositeOperation = 'lighter';
+    const atmo = ctx.createRadialGradient(0, 0, r * 0.96, 0, 0, r * 1.16);
+    atmo.addColorStop(0, 'rgba(120,170,255,0)');
+    atmo.addColorStop(0.55, `rgba(120,170,255,${0.06 + flash * (0.08 + 0.12 * prox)})`);
+    atmo.addColorStop(1, 'rgba(120,150,255,0)');
+    ctx.fillStyle = atmo;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Planet disc + texture
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Ocean/land texture
+    ctx.save();
+    ctx.rotate(spin);
+    const s = earth.size;
+    const scale = (r * 2) / s;
+    ctx.scale(scale, scale);
+    ctx.drawImage(earth.tex, -s / 2, -s / 2);
+    ctx.restore();
+
+    // Clouds (brighten a little on flash)
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.55 + flash * (0.18 + 0.10 * prox);
+    ctx.rotate(cloudSpin);
+    const s2 = earth.size;
+    const scale2 = (r * 2.05) / s2;
+    ctx.scale(scale2, scale2);
+    ctx.drawImage(earth.clouds, -s2 / 2, -s2 / 2);
+    ctx.restore();
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Spherical shading
+    const shade = ctx.createRadialGradient(-r * 0.35, -r * 0.25, r * 0.25, 0, 0, r);
+    shade.addColorStop(0, 'rgba(0,0,0,0)');
+    shade.addColorStop(0.62, 'rgba(0,0,0,0.22)');
+    shade.addColorStop(1, 'rgba(0,0,0,0.62)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(-r, -r, r * 2, r * 2);
+
+    // Terminator
+    ctx.save();
+    ctx.rotate(-0.65);
+    const term = ctx.createLinearGradient(-r, 0, r, 0);
+    term.addColorStop(0, 'rgba(0,0,0,0.70)');
+    term.addColorStop(0.45, 'rgba(0,0,0,0.35)');
+    term.addColorStop(0.62, 'rgba(0,0,0,0.08)');
+    term.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = term;
+    ctx.fillRect(-r, -r, r * 2, r * 2);
+    ctx.restore();
+
+    // Edge highlight
+    ctx.strokeStyle = 'rgba(180,210,255,0.10)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, r - 1, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /** Meteors */
+  class Meteor {
+    constructor(opts) {
+      this.x = opts?.x ?? rand(-W * 0.15, W * 1.15);
+      this.y = opts?.y ?? rand(-H * 0.25, H * 0.15);
+
+      const baseAngle = opts?.angle ?? rand(0.70, 0.95);
+      const jitter = rand(-0.06, 0.06);
+      this.a = baseAngle + jitter;
+
+      this.type = opts?.type ?? (Math.random() < 0.03 ? 'fireball' : 'normal');
+      this.size = opts?.size ?? (this.type === 'fireball' ? rand(1.6, 2.6) : rand(0.45, 1.25));
+
+      this.v = opts?.v ?? rand(620, 980) * (this.type === 'fireball' ? 1.15 : 1);
+      this.len = opts?.len ?? rand(140, 420) * this.size * (this.type === 'fireball' ? 1.35 : 1);
+      this.thick = opts?.thick ?? rand(0.7, 1.9) * this.size * (this.type === 'fireball' ? 1.25 : 1);
+
+      this.life = 0;
+      this.ttl = opts?.ttl ?? rand(0.55, 1.25) * (this.type === 'fireball' ? 1.25 : 1);
+      this.spark = this.type === 'fireball' ? true : (Math.random() < 0.22);
+      this.hueShift = (this.type === 'fireball' ? rand(18, 42) : rand(-10, 14));
+      this.frag = this.type === 'fireball' ? Math.random() < 0.65 : false;
+    }
+
+    step(dt, speedMul, wind) {
+      const s = this.v * speedMul;
+      const dx = Math.cos(this.a) * s * dt + wind * 120 * dt;
+      const dy = Math.sin(this.a) * s * dt;
+      this.x += dx;
+      this.y += dy;
+      this.life += dt;
+      return this.life < this.ttl && this.x > -W * 0.35 && this.x < W * 1.35 && this.y < H * 1.35;
+    }
+
+    draw(tailMul) {
+      const t = clamp(this.life / this.ttl, 0, 1);
+      const fadeIn = clamp(t / 0.12, 0, 1);
+      const fadeOut = 1 - clamp((t - 0.62) / 0.38, 0, 1);
+      const alpha = (this.type === 'fireball' ? 1.0 : 0.9) * fadeIn * fadeOut;
+
+      const len = this.len * tailMul;
+      const x2 = this.x - Math.cos(this.a) * len;
+      const y2 = this.y - Math.sin(this.a) * len;
+
+      const g = ctx.createLinearGradient(this.x, this.y, x2, y2);
+
+      const warm = this.type === 'fireball'
+        ? clamp((this.hueShift) / 60, 0.15, 1)
+        : clamp((this.hueShift + 10) / 25, 0, 1);
+
+      const headR = Math.round(230 + 25 * warm);
+      const headG = Math.round(240 - 40 * warm + 20);
+      const headB = Math.round(255 - 90 * warm);
+
+      let cHead, cMid, cTail;
+
+      if (this.type === 'fireball') {
+        // Fire-red, thick, long fireball
+        cHead = `rgba(255, 70, 20, ${0.98 * alpha})`;
+        cMid  = `rgba(255, 140, 50, ${0.52 * alpha})`;
+        cTail = `rgba(255, 80, 30, 0)`;
+        g.addColorStop(0, cHead);
+        g.addColorStop(0.18, `rgba(255, 210, 120, ${0.32 * alpha})`);
+        g.addColorStop(0.55, cMid);
+        g.addColorStop(1, cTail);
+      } else {
+        cHead = `rgba(${headR}, ${headG}, ${headB}, ${0.95 * alpha})`;
+        cMid  = `rgba(${Math.round(150 + 75 * warm)}, ${Math.round(170 + 55 * warm)}, ${Math.round(255 - 120 * warm)}, ${0.36 * alpha})`;
+        cTail = `rgba(80, 90, 160, 0)`;
+        g.addColorStop(0, cHead);
+        g.addColorStop(0.25, cMid);
+        g.addColorStop(1, cTail);
+      }
+
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = g;
+      ctx.lineWidth = this.type === 'fireball' ? this.thick * 1.25 : this.thick;
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      if (this.type === 'fireball') {
+        const g2 = ctx.createLinearGradient(this.x, this.y, x2, y2);
+        g2.addColorStop(0, `rgba(255,245,235,${0.90 * alpha})`);
+        g2.addColorStop(0.22, `rgba(255,120,40,${0.55 * alpha})`);
+        g2.addColorStop(1, 'rgba(255,60,20,0)');
+        ctx.strokeStyle = g2;
+        ctx.lineWidth = Math.max(1.8, (this.type === 'fireball' ? this.thick * 1.25 : this.thick) * 0.70);
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+
+      ctx.globalCompositeOperation = 'lighter';
+      const glowA = this.type === 'fireball' ? 1.0 : 0.6;
+      ctx.fillStyle = this.type === 'fireball'
+        ? `rgba(255, 70, 20, ${0.60 * alpha})`
+        : `rgba(255,255,255,${glowA * alpha})`;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 1.8 + this.thick * (this.type === 'fireball' ? 1.2 : 1), 0, Math.PI * 2);
+      ctx.fill();
+
+      if (this.spark && t > 0.10 && t < 0.75) {
+        const n = this.type === 'fireball' ? 5 : 2;
+        for (let i = 0; i < n; i++) {
+          const sx = this.x + rand(-10, 10);
+          const sy = this.y + rand(-10, 10);
+          ctx.fillStyle = this.type === 'fireball'
+            ? `rgba(255,90,40,${0.28 * alpha})`
+            : `rgba(255,255,255,${0.16 * alpha})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, rand(0.9, this.type === 'fireball' ? 2.4 : 1.6), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      if (this.frag && t > 0.18 && t < 0.7) {
+        for (let i = 0; i < 2; i++) {
+          const fx = this.x - Math.cos(this.a) * rand(18, 55);
+          const fy = this.y - Math.sin(this.a) * rand(18, 55);
+          const fl = rand(18, 46);
+          const tx = fx - Math.cos(this.a) * fl;
+          const ty = fy - Math.sin(this.a) * fl;
+          const fg = ctx.createLinearGradient(fx, fy, tx, ty);
+          fg.addColorStop(0, `rgba(255,100,45,${0.38 * alpha})`);
+          fg.addColorStop(1, 'rgba(255,100,45,0)');
+          ctx.strokeStyle = fg;
+          ctx.lineWidth = Math.max(0.9, this.thick * 0.35);
+          ctx.beginPath();
+          ctx.moveTo(fx, fy);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+      ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  let meteors = [];
+  let running = true;
+
+  function resetAll() {
+    meteors = [];
+    buildStars();
+    scheduleNextFireball(performance.now());
+  }
+
+  /** Burst mode */
+  let burstUntil = 0;
+  function burst(seconds = 3) {
+    burstUntil = performance.now() + seconds * 1000;
+  }
+
+  /** Background draw */
+  function drawBackground(time) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#070914');
+    g.addColorStop(0.55, '#050712');
+    g.addColorStop(1, '#02030a');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    const hg = ctx.createLinearGradient(0, H * 0.55, 0, H);
+    hg.addColorStop(0, 'rgba(90, 110, 180, 0)');
+    hg.addColorStop(1, 'rgba(40, 60, 120, 0.18)');
+    ctx.fillStyle = hg;
+    ctx.fillRect(0, H * 0.55, W, H * 0.45);
+
+    const mx = W * 0.82;
+    const my = H * 0.20;
+    const mr = Math.min(W, H) * 0.06;
+    const glow = ctx.createRadialGradient(mx, my, mr * 0.2, mx, my, mr * 2.6);
+    glow.addColorStop(0, 'rgba(255,255,255,0.14)');
+    glow.addColorStop(0.3, 'rgba(220,230,255,0.08)');
+    glow.addColorStop(1, 'rgba(120,150,255,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(mx, my, mr * 2.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.beginPath();
+    ctx.arc(mx, my, mr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    for (const s of stars) {
+      const tw = 0.5 + 0.5 * Math.sin((time / 1000) * s.tw + s.ph);
+      const a = s.a * (0.65 + 0.55 * tw);
+      ctx.fillStyle = `rgba(255,255,255,${a})`;
+      ctx.fillRect(s.x, s.y, s.r, s.r);
+    }
+  }
+
+  /** Fireball scheduling (Poisson process, mean interval slider) */
+  let nextFireballAt = 0;
+  function scheduleNextFireball(now) {
+    const mean = Math.max(5, Number(elFireInt.value) || 30);
+    nextFireballAt = now + expRand(mean) * 1000;
+  }
+
+  function spawnFireball(now) {
+    // Keep shower direction coherent
+    const showerAngle = 0.82 + 0.05 * Math.sin(now / 4200);
+    const speedMul = Number(elSpeed.value);
+
+    const x = rand(-W * 0.1, W * 1.1);
+    const y = rand(-H * 0.22, H * 0.05);
+    const size = rand(2.2, 3.6);
+
+    meteors.push(new Meteor({
+      x, y,
+      type: 'fireball',
+      size,
+      angle: showerAngle + rand(-0.05, 0.05),
+      v: rand(800, 1300) * (0.9 + 0.25 * speedMul) * 1.18,
+      len: rand(420, 820),
+      thick: rand(2.2, 4.2),
+      ttl: rand(0.75, 1.45)
+    }));
+
+    // Fireball flash (screen light) + earth-atmosphere mix handled in drawEarth
+    triggerFlash(x, y, 0.95 + size * 0.28 + Math.random() * 0.15);
+
+    if (meteors.length > 220) meteors.shift();
+  }
+
+  /** Spawn logic (normal meteors) */
+  let spawnAcc = 0;
+  function spawnMeteors(dt, now) {
+    const baseRate = Number(elRate.value);
+    const speedMul = Number(elSpeed.value);
+
+    // recent shower feel: keep direction consistent
+    const showerAngle = 0.82 + 0.05 * Math.sin(now / 4200);
+
+    const isBurst = now < burstUntil;
+    const rate = baseRate * (isBurst ? 3.2 : 1);
+
+    spawnAcc += rate * dt;
+    while (spawnAcc >= 1) {
+      spawnAcc -= 1;
+
+      const x = rand(-W * 0.1, W * 1.1);
+      const y = rand(-H * 0.22, H * 0.05);
+
+      // Size variety: many small, some medium, few large
+      const u = Math.random();
+      const size = (u < 0.65 ? rand(0.40, 0.85) : (u < 0.93 ? rand(0.85, 1.25) : rand(1.25, 1.75)));
+
+      meteors.push(new Meteor({
+        x, y,
+        type: 'normal',
+        size,
+        angle: showerAngle + rand(-0.05, 0.05),
+        v: rand(680, 1080) * (0.9 + 0.25 * speedMul),
+        len: rand(180, 480),
+        thick: rand(0.9, 2.2),
+        ttl: rand(0.55, 1.15)
+      }));
+
+      if (meteors.length > 220) meteors.shift();
+    }
+  }
+
+  /** Mixed light sources (screen-space halos) */
+  function drawFlashHalos() {
+    if (flash <= 0.001) return;
+
+    // 1) Fireball local halo
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const rad1 = Math.min(W, H) * (0.22 + flash * 0.12);
+    const g1 = ctx.createRadialGradient(flashX, flashY, 0, flashX, flashY, rad1);
+    g1.addColorStop(0, `rgba(255,110,60,${0.22 * flash})`);
+    g1.addColorStop(0.45, `rgba(255,40,20,${0.14 * flash})`);
+    g1.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g1;
+    ctx.fillRect(0, 0, W, H);
+
+    // 2) Earth atmosphere halo (secondary light source)
+    const { cx, cy, r } = earthState;
+    const dist = Math.hypot(flashX - cx, flashY - cy);
+    const prox = clamp(1 - dist / (r * 3.2), 0, 1);
+
+    if (prox > 0) {
+      const inner = r * (0.82 - 0.04 * prox);
+      const outer = r * (1.35 + 0.10 * prox);
+      const g2 = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
+      g2.addColorStop(0, 'rgba(0,0,0,0)');
+      g2.addColorStop(0.35, `rgba(170,210,255,${0.05 * flash * prox})`);
+      g2.addColorStop(0.62, `rgba(255,230,200,${0.08 * flash * prox})`);
+      g2.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g2;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    ctx.restore();
+  }
+
+  /** FPS */
+  let last = performance.now();
+  let fpsLast = performance.now();
+  let fpsFrames = 0;
+  function updateFps(now) {
+    fpsFrames++;
+    if (now - fpsLast >= 500) {
+      const fps = Math.round((fpsFrames * 1000) / (now - fpsLast));
+      fpsBadge.textContent = `${fps} fps`;
+      fpsFrames = 0;
+      fpsLast = now;
+    }
+  }
+
+  /** Main loop */
+  function frame(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+
+    if (running) {
+      decayFlash(dt);
+
+      // Fireball scheduling: independent of meteor density
+      if (now >= nextFireballAt) {
+        spawnFireball(now);
+        scheduleNextFireball(now);
+      }
+
+      drawBackground(now);
+      spawnMeteors(dt, now);
+
+      const speedMul = Number(elSpeed.value);
+      const tailMul = Number(elTail.value);
+      const wind = Number(elWind.value);
+
+      const alive = [];
+      for (const m of meteors) {
+        if (m.step(dt, speedMul, wind)) alive.push(m);
+        m.draw(tailMul);
+      }
+      meteors = alive;
+
+      // Draw Earth (updates earthState for mixed lighting)
+      drawEarth(now);
+
+      // Mixed light sources (fireball + earth atmosphere)
+      drawFlashHalos();
+    } else {
+      drawBackground(now);
+      for (const m of meteors) m.draw(Number(elTail.value));
+      drawEarth(now);
+      drawFlashHalos();
+    }
+
+    updateFps(now);
+    requestAnimationFrame(frame);
+  }
+
+  /** Controls */
+  function toggleRun() {
+    running = !running;
+    btnToggle.textContent = running ? '暫停' : '播放';
+  }
+
+  btnToggle.addEventListener('click', toggleRun);
+  btnBurst.addEventListener('click', () => burst(3));
+  btnReset.addEventListener('click', resetAll);
+  btnHide.addEventListener('click', () => {
+    hud.style.display = (hud.style.display === 'none') ? '' : 'none';
+  });
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === ' ' || k === 'spacebar') {
+      e.preventDefault();
+      toggleRun();
+    }
+    if (k === 'b') burst(3);
+    if (k === 'h') hud.style.display = (hud.style.display === 'none') ? '' : 'none';
+  });
+
+  /** Self-tests (lightweight) */
+  function runSelfTests() {
+    try {
+      console.groupCollapsed('[MeteorShower] self-tests');
+      console.assert(canvas instanceof HTMLCanvasElement, 'canvas exists');
+      console.assert(ctx && typeof ctx.fillRect === 'function', '2D context ok');
+      console.assert(W > 0 && H > 0, 'canvas sized');
+      console.assert(typeof spawnMeteors === 'function', 'spawnMeteors exists');
+      console.assert(typeof spawnFireball === 'function', 'spawnFireball exists');
+      console.assert(typeof drawEarth === 'function', 'drawEarth exists');
+      console.assert(elFireInt instanceof HTMLInputElement, 'fireInt slider exists');
+      console.assert(Number(elFireInt.value) >= 5, 'fireInt value valid');
+      console.groupEnd();
+    } catch (err) {
+      console.error('[MeteorShower] self-tests failed:', err);
+    }
+  }
+
+  /** Init */
+  resize();
+  syncUI();
+  scheduleNextFireball(performance.now());
+  runSelfTests();
+  requestAnimationFrame((t) => {
+    last = t;
+    fpsLast = t;
+    requestAnimationFrame(frame);
+  });
+})();
+</script>
+</body>
+</html>
